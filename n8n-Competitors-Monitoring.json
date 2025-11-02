@@ -1,0 +1,405 @@
+{
+  "name": "Competitors News Monitoring",
+  "nodes": [
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {
+          "frequencyPenalty": 0.2,
+          "maxTokens": 2500,
+          "temperature": 0.3,
+          "topP": 0.9
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [1504, -1664],
+      "id": "1ad2973b-8d4a-4cc7-ab1f-5e560da5adc5",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [1760, -1664],
+      "id": "b783b6bb-957c-45bd-ac81-d69bd1463c08",
+      "name": "Think"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Role: You are a market researcher\n\nGoal: Generate a 7-day competitor insights report (new products, updates, analyses, or complaints)\n\nSteps:\n1. Get competitor names from Google Sheet column named 'Competitor' or similar (unique, non-blank)\n2. For each competitor, query Perplexity API and extract `content` + `citations[]`.\n3. Map [1],[2] to markdown links using citations (1-based). Omit invalid or extra refs\n4. Deduplicate news from previous reports (7-day window)\n5. Output only markdown:\n\n## Competitor Monitoring Report (Last 7 Days)\n\n### <Competitor>\n- Bullet findings (<7 days) with inline links\nIf none → “No updates”\n\nFormatting rules:\n- One blank line between competitors\n- No “Links:” or code blocks\n- Preserve competitor order",
+        "options": {
+          "maxIterations": 30,
+          "returnIntermediateSteps": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [1688, -1888],
+      "id": "bd543be1-5a7b-4b50-87a9-0355c0d3deb8",
+      "name": "Research Agent",
+      "retryOnFail": true,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [1],
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [832, -1636],
+      "id": "0afa6a98-2030-4967-a8ec-85d919a57c62",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Schedule Trigger').item.json.timestamp }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [1632, -1664],
+      "id": "9592b676-7696-4bb1-a5c8-96d2eb8c341f",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "CompetitorsSheet"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [1888, -1664],
+      "id": "86ef82ac-f0fb-443f-a2ff-5e203acd3e25",
+      "name": "Get competitors",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "messages": {
+          "message": [
+            {
+              "content": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('message0_Text', ``, 'string') }}"
+            }
+          ]
+        },
+        "options": {
+          "frequencyPenalty": 0.3,
+          "maxTokens": 1500,
+          "temperature": 0.4,
+          "topK": 5,
+          "topP": 0.9,
+          "presencePenalty": 0.3,
+          "returnImages": false,
+          "returnRelatedQuestions": false
+        },
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.perplexityTool",
+      "typeVersion": 1,
+      "position": [2016, -1664],
+      "id": "15a7e574-1841-48c9-8da0-80ee1fbdc9f9",
+      "name": "Message Perplexity",
+      "credentials": {
+        "perplexityApi": {
+          "id": "YOUR_PERPLEXITY_CREDENTIAL_ID",
+          "name": "Perplexity account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "your.email@example.com",
+        "subject": "📊 Weekly Report - Competitors Analysis",
+        "message": "=Hello,\n\nHere is the weekly analysis report for competitors.\n\n{{ $json.output }}\n\n---\nData source: Google Sheet \"CompetitorsSheet\"\nNext analysis: {{ $now.plus(7, 'days').format('dd/MM/yyyy') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2448, -1784],
+      "id": "d9eeefc7-6f37-4842-9454-0c9d04d51986",
+      "name": "Send a message",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "markdownToHtml",
+        "markdown": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.markdown",
+      "typeVersion": 1,
+      "position": [2224, -1784],
+      "id": "d0f1307c-82e2-476b-ba48-03d746c14ae8",
+      "name": "Markdown"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "=name='CompetitorsSheet' and mimeType='application/vnd.google-apps.spreadsheet'",
+        "filter": {},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1056, -1636],
+      "id": "6f8a689a-4777-48d6-8861-187477c47ee9",
+      "name": "Search files and folders",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fe6bad5d-3948-4088-b3fa-986bea812b15",
+              "leftValue": "=",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1280, -1636],
+      "id": "929dfde4-5fdf-43ae-a73d-c89db3d6401d",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "your.email@example.com",
+        "subject": "⚠️ Google Sheet \"CompetitorsSheet\" not found",
+        "message": "=The Google Sheet \"CompetitorsSheet\" was not found.\n\nPlease create this file before the next workflow execution.\n\nExpected name: CompetitorsSheet\nType: Google Sheets\nMIME Type: application/vnd.google-apps.spreadsheet\n\nNext execution: in 7 days\n\n---\nn8n Workflow - Executed on: {{ $now.format('dd/MM/yyyy HH:mm') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1752, -1488],
+      "id": "7698d530-bb2b-492c-9a4d-ee4ac307b60d",
+      "name": "No Google Sheets email",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "No Google Sheets found"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [2224, -1488],
+      "id": "7af04fd8-0a6b-46df-9dd0-41ddc5f07135",
+      "name": "Stop and Error"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think": {
+      "ai_tool": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research Agent": {
+      "main": [
+        [
+          {
+            "node": "Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Search files and folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get competitors": {
+      "ai_tool": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Perplexity": {
+      "ai_tool": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Markdown": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search files and folders": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Google Sheets email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Google Sheets email": {
+      "main": [
+        [
+          {
+            "node": "Stop and Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": -1,
+    "saveExecutionProgress": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "timeSavedPerExecution": 60
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
