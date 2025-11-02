@@ -19,3 +19,5 @@ Weekly automated competitor monitoring using Google Sheets, OpenAI, and Perplexi
 
 ## Google Sheet Format
 Create a sheet with a column named "Competitor" containing competitor names.
+
+Workflow inspired by Paweł Huryn
